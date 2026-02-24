@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simplificant | Staff Command</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { background-color: #020617; color: white; font-family: 'Inter', sans-serif; margin: 0; }
+        .main-bg { background: radial-gradient(ellipse at top, #0f172a, #020617, #000); }
+        .glass { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .logo-text { font-size: 2.5rem; font-weight: 900; letter-spacing: -0.05em; background: linear-gradient(to right, #22d3ee, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="main-bg min-h-screen">
+
+    <div id="login-section" class="flex items-center justify-center min-h-screen p-6">
+        <div class="glass p-10 rounded-[2.5rem] w-full max-w-md shadow-2xl border-t border-cyan-500/20 text-center">
+            <h1 class="logo-text">SIMPLIFICANT</h1>
+            <p class="text-slate-500 text-[0.65rem] font-bold uppercase tracking-[0.2em] mb-10">Medical Command Portal</p>
+            <div class="space-y-4 text-left">
+                <input type="email" id="email" placeholder="prem@staff.com" class="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl outline-none focus:border-cyan-500 transition-all text-white">
+                <input type="password" id="pass" placeholder="Security Key" class="w-full bg-slate-950 border border-slate-800 p-4 rounded-2xl outline-none focus:border-cyan-500 transition-all text-white">
+                <p id="status-msg" class="text-xs text-center min-h-[1.25rem]"></p>
+                <button type="button" id="login-btn" class="w-full bg-cyan-400 text-slate-950 font-black p-4 rounded-2xl hover:bg-cyan-300 transition-all">AUTHORIZE ACCESS</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="dashboard-section" class="hidden p-8">
+        <nav class="flex justify-between items-center mb-12">
+            <h1 class="text-2xl font-black tracking-tighter text-cyan-400">SIMPLIFICANT</h1>
+            <button onclick="location.reload()" class="text-xs font-bold text-slate-500 hover:text-red-400 uppercase tracking-widest">Terminate Session</button>
+        </nav>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="glass p-8 rounded-[2rem] border-t border-cyan-500/20">
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Live Inventory</p>
+                <h2 class="text-3xl font-black mb-6">Critical Care Beds</h2>
+                <div class="flex items-end gap-3">
+                    <span id="bed-display" class="text-6xl font-black text-cyan-400">--</span>
+                    <span id="total-display" class="text-slate-500 font-bold mb-2">/ -- Available</span>
+                </div>
+            </div>
+
+            <div class="glass p-8 rounded-[2rem] border-t border-blue-500/20">
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Operations</p>
+                <h2 class="text-3xl font-black mb-6">Patient Intake</h2>
+                <button id="intake-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-blue-500/20">
+                    REGISTER NEW PATIENT
+                </button>
+                <p id="op-status" class="text-xs text-center mt-4 text-slate-400 min-h-[1rem]"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SB_URL = 'https://lveunnnlpqymkjlvosyy.supabase.co'; 
+        const SB_KEY = 'sb_publishable_Hs-VJ9DexC92iZBjzxPOtw_OdLQnkMS'; 
+        const supabaseClient = supabase.createClient(SB_URL, SB_KEY);
+
+        const loginBtn = document.getElementById('login-btn');
+
+        // --- LOGIN LOGIC ---
+        loginBtn.addEventListener('click', async () => {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('pass').value;
+            const status = document.getElementById('status-msg');
+
+            if(!email || !password) {
+                status.innerText = "Please fill in all fields.";
+                status.style.color = "#f87171";
+                return;
+            }
+
+            status.innerText = "Connecting to Cloud...";
+            status.style.color = "#22d3ee";
+
+            try {
+                const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+                if (error) {
+                    status.innerText = "Access Denied: " + error.message;
+                    status.style.color = "#f87171";
+                } else {
+                    document.getElementById('login-section').classList.add('hidden');
+                    document.getElementById('dashboard-section').classList.remove('hidden');
+                    loadStats();
+                }
+            } catch (err) {
+                status.innerText = "System Error. Check Console.";
+            }
+        });
+
+        // --- FETCH DATA LOGIC ---
+        async function loadStats() {
+            const { data, error } = await supabaseClient.from('hospital_stats').select('*').single();
+            if (data) {
+                document.getElementById('bed-display').innerText = data.bed_count;
+                document.getElementById('total-display').innerText = `/ ${data.total_capacity} Total`;
+            }
+        }
+
+        // --- ADMIT PATIENT LOGIC ---
+        async function admitPatient() {
+            const opStatus = document.getElementById('op-status');
+            const bedDisplay = document.getElementById('bed-display');
+            let currentBeds = parseInt(bedDisplay.innerText);
+
+            if (currentBeds <= 0) {
+                opStatus.innerText = "Error: No beds available.";
+                opStatus.style.color = "#f87171";
+                return;
+            }
+
+            opStatus.innerText = "Updating Cloud Database...";
+            opStatus.style.color = "#22d3ee";
+
+            // Update bed count in Supabase
+            const { error } = await supabaseClient
+                .from('hospital_stats')
+                .update({ bed_count: currentBeds - 1 })
+                .eq('id', 1); // Targets the row created earlier
+
+            if (error) {
+                opStatus.innerText = "Failed to update: " + error.message;
+                opStatus.style.color = "#f87171";
+            } else {
+                opStatus.innerText = "Success: Patient Admitted!";
+                opStatus.style.color = "#4ade80";
+                loadStats(); // Refresh screen numbers
+            }
+        }
+
+        // Link the button to the function
+        document.getElementById('intake-btn').onclick = admitPatient;
+
+    </script>
+</body>
+</html>
